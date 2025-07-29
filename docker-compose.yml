@@ -1,94 +1,113 @@
 services:
-  postgres:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: postgres_db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: trust
-      POSTGRES_PASSWORD: iaspec
-      POSTGRES_DB: ecfps_trust
+  # Trust Bank Tomcat (Gateway)
+  trust-ecfps-gateway:
+    image: trust-ecfps-gateway:latest
+    container_name: trust-ecfps-gateway
     ports:
-      - "5432:5432"
-    volumes:
-      # This volume persists the database data
-      - ./pgdata:/var/lib/postgresql/data
-      # This volume mounts our SQL script to be run on initialization
-      - ./init-scripts:/docker-entrypoint-initdb.d
-    command:
-      - "postgres"
-      - "-c"
-      - "shared_preload_libraries=pg_cron"
-      - "-c"
-      - "cron.database_name=ecfps_trust"
-    healthcheck:
-      # Corrected the user and database to match your environment variables
-      test: ["CMD-SHELL", "pg_isready -U trust -d ecfps_trust"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - "8080:8080"
+    cpus: 2.0
+    mem_limit: 4g
+    env_file:
+      - ./env-config/gateway.env
     networks:
-      - vault-postgres-network
+      - ecfps-network
+      - postgres_vault-postgres-network
+    # volumes:
+    #   - ./tomcat-conf:/ecfps/conf
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/ecfps/bin/health-check.sh", "-q"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
 
-  vault:
-    image: hashicorp/vault:latest
-    container_name: vault_server
-    restart: unless-stopped
+  # Trust Bank BOA
+  # CPU Strategy: Uses isolated cores 2,3 for true dedicated performance
+  trust-ecfps-boa:
+    image: trust-ecfps-boa:latest
+    container_name: trust-ecfps-boa
     ports:
-      - "8200:8200"
-    environment:
-      VAULT_DEV_ROOT_TOKEN_ID: dev-only-token
-      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
-    cap_add:
-      - IPC_LOCK
-    command: |
-      sh -c "
-        # Start Vault in development mode
-        vault server -dev -dev-root-token-id=dev-only-token -dev-listen-address=0.0.0.0:8200 &
-        
-        # Wait for Vault to be ready
-        export VAULT_ADDR='http://127.0.0.1:8200'
-        export VAULT_TOKEN='dev-only-token'
-        
-        until vault status > /dev/null 2>&1; do
-          echo 'Waiting for Vault to start...'
-          sleep 1
-        done
-        
-        echo 'Vault is ready. Setting up secrets...'
-        
-        # Enable KV v2 secrets engine
-        vault secrets enable -path=secret kv-v2 || echo 'KV v2 already enabled'
-        
-        # # Create database secrets for ECFPS applications
-        vault kv put secret/ecfps/database jdbc.url='jdbc:postgresql://10.3.80.101:5432/ecfps_trust?stringtype=unspecified' db.username='trust' db.password='iaspec' jdbc.driverClassName='org.postgresql.Driver'
-        
-        # Module-specific database configurations
-        # for module in payment proxy cbe; do
-        #     echo \"Creating secrets for $$module...\"
-        #     vault kv put secret/ecfps/$$module/database jdbc.url='jdbc:postgresql://10.3.80.101:5432/ecfps_trust?stringtype=unspecified' jdbc.username='trust' jdbc.password='iaspec' jdbc.driverClassName='org.postgresql.Driver'
-        # done
-        
-        echo 'Vault setup completed successfully!'
-        echo 'Vault UI available at: http://localhost:8200'
-        echo 'Root token: dev-only-token'
-        
-        # Keep the container running
-        wait
-      "
-    healthcheck:
-      test: ["CMD", "sh", "-c", "VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=dev-only-token vault status"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    depends_on:
-      postgres:
-        condition: service_healthy
+      - "8085:8080"
+    cpus: 1.0
+    mem_limit: 2g
+    env_file:
+      - ./env-config/boa.env
     networks:
-      - vault-postgres-network
+      - ecfps-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/ecfps/bin/health-check.sh", "-q"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+  # Spring Boot Services
+  # Proxy Service
+  trust-ecfps-proxy:
+    image: trust-ecfps-proxy:latest
+    container_name: trust-ecfps-proxy
+    ports:
+      - "8081:8080"
+    cpus: 1.0
+    mem_limit: 2g
+    env_file:
+      - ./env-config/default.env
+    networks:
+      - ecfps-network
+      - postgres_vault-postgres-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health/liveness || nc -z localhost 8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Payment Service
+  trust-ecfps-payment:
+    image: trust-ecfps-payment:latest
+    container_name: trust-ecfps-payment
+    ports:
+      - "8082:8080"
+    cpus: 2.0
+    mem_limit: 4g
+    env_file:
+      - ./env-config/default.env
+    networks:
+      - ecfps-network
+      - postgres_vault-postgres-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health/liveness || nc -z localhost 8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # CBE Service
+  trust-ecfps-cbe:
+    image: trust-ecfps-cbe:latest
+    container_name: trust-ecfps-cbe
+    ports:
+      - "8083:8080"
+    env_file:
+      - ./env-config/default.env
+    networks:
+      - ecfps-network
+      - postgres_vault-postgres-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health/liveness || nc -z localhost 8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+
 
 networks:
-  vault-postgres-network:
+  ecfps-network:
     driver: bridge
+  postgres_vault-postgres-network:
+    external: true
