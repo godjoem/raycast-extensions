@@ -1,0 +1,94 @@
+services:
+  postgres:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: postgres_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: trust
+      POSTGRES_PASSWORD: iaspec
+      POSTGRES_DB: ecfps_trust
+    ports:
+      - "5432:5432"
+    volumes:
+      # This volume persists the database data
+      - ./pgdata:/var/lib/postgresql/data
+      # This volume mounts our SQL script to be run on initialization
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_preload_libraries=pg_cron"
+      - "-c"
+      - "cron.database_name=ecfps_trust"
+    healthcheck:
+      # Corrected the user and database to match your environment variables
+      test: ["CMD-SHELL", "pg_isready -U trust -d ecfps_trust"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vault-postgres-network
+
+  vault:
+    image: hashicorp/vault:latest
+    container_name: vault_server
+    restart: unless-stopped
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: dev-only-token
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    cap_add:
+      - IPC_LOCK
+    command: |
+      sh -c "
+        # Start Vault in development mode
+        vault server -dev -dev-root-token-id=dev-only-token -dev-listen-address=0.0.0.0:8200 &
+        
+        # Wait for Vault to be ready
+        export VAULT_ADDR='http://127.0.0.1:8200'
+        export VAULT_TOKEN='dev-only-token'
+        
+        until vault status > /dev/null 2>&1; do
+          echo 'Waiting for Vault to start...'
+          sleep 1
+        done
+        
+        echo 'Vault is ready. Setting up secrets...'
+        
+        # Enable KV v2 secrets engine
+        vault secrets enable -path=secret kv-v2 || echo 'KV v2 already enabled'
+        
+        # # Create database secrets for ECFPS applications
+        vault kv put secret/ecfps/database jdbc.url='jdbc:postgresql://10.3.80.101:5432/ecfps_trust?stringtype=unspecified' db.username='trust' db.password='iaspec' jdbc.driverClassName='org.postgresql.Driver'
+        
+        # Module-specific database configurations
+        # for module in payment proxy cbe; do
+        #     echo \"Creating secrets for $$module...\"
+        #     vault kv put secret/ecfps/$$module/database jdbc.url='jdbc:postgresql://10.3.80.101:5432/ecfps_trust?stringtype=unspecified' jdbc.username='trust' jdbc.password='iaspec' jdbc.driverClassName='org.postgresql.Driver'
+        # done
+        
+        echo 'Vault setup completed successfully!'
+        echo 'Vault UI available at: http://localhost:8200'
+        echo 'Root token: dev-only-token'
+        
+        # Keep the container running
+        wait
+      "
+    healthcheck:
+      test: ["CMD", "sh", "-c", "VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=dev-only-token vault status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - vault-postgres-network
+
+networks:
+  vault-postgres-network:
+    driver: bridge
