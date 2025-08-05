@@ -1,0 +1,2 @@
+curl -u {username}:{token} \
+     -O "https://owncloud.iaspec.com/remote.php/webdav/Trust%20Bank%20Files/TRUST-FPS-FRS_v1.0.docx"
