@@ -1,17 +1,15 @@
-  - job_name: 'ecfps-rtmgservice'
-    static_configs:
-      - targets: ['trust-ecfps-gateway:8080']
-    scrape_interval: 10s
-    metrics_path: /rtmgservice/actuator/prometheus
-    scrape_timeout: 5s
-    # Honor labels to identify failing targets
-    honor_labels: true
+Customization for SG Market
+•⁠  ⁠Inward Credit Transfer skipped receiving payment status report before posting (not applicable to BCS)
+•⁠  ⁠2 manual settlement cycles (immediate settlement in HK & Macau)
+•⁠  ⁠added Sign On/Off 
+•⁠  ⁠Proxy ID types different from HK
 
-  - job_name: 'ecfps-admin'
-    static_configs:
-      - targets: ['trust-ecfps-gateway:8080']
-    scrape_interval: 10s
-    metrics_path: /admin/actuator/prometheus
-    scrape_timeout: 5s
-    # Honor labels to identify failing targets
-    honor_labels: true
+Customization to Trust Bank
+•⁠  ⁠integration with Payment Gateway (must do for each bank)
+•⁠  ⁠integrate with SomoLogic
+•⁠  ⁠integrate with Okta
+•⁠  ⁠use of Cloud HSM & Hashicorp Vault
+•⁠  ⁠use of Aurora
+•⁠  ⁠AWS deployment packaging arrangement
+•⁠  ⁠Exception Handling Flow
+•⁠  ⁠Reconciliation
