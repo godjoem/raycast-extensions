@@ -1,15 +1,1 @@
-Customization for SG Market
-•⁠  ⁠Inward Credit Transfer skipped receiving payment status report before posting (not applicable to BCS)
-•⁠  ⁠2 manual settlement cycles (immediate settlement in HK & Macau)
-•⁠  ⁠added Sign On/Off 
-•⁠  ⁠Proxy ID types different from HK
-
-Customization to Trust Bank
-•⁠  ⁠integration with Payment Gateway (must do for each bank)
-•⁠  ⁠integrate with SomoLogic
-•⁠  ⁠integrate with Okta
-•⁠  ⁠use of Cloud HSM & Hashicorp Vault
-•⁠  ⁠use of Aurora
-•⁠  ⁠AWS deployment packaging arrangement
-•⁠  ⁠Exception Handling Flow
-•⁠  ⁠Reconciliation
+https://app.beeceptor.com/shared/b7d54607ae09a3a9a0469efec1adc5a8113f234564faf4c0
