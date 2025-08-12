@@ -1,2 +1,23 @@
-iaspec123
-BtmeY3eoP8p1c0lAX4qXgqbqrFee99KuXjUSWACu
+curl --location '192.168.32.72:8083/channel/postTransactionCallback' \
+--header 'x-system-id: postman' \
+--header 'Content-Type: application/json' \
+--header 'Accept: application/json' \
+--header 'apiKey: AD2569E2DF1F11E79600080027DC4303' \
+--data '{
+  "ledgerTransactions": [
+    {
+      "paymentId": 3,
+      "acctNo": "147166500",
+      "branch": "str",
+      "clearingCode": "TRBUSGS0XXX",
+      "reference": "postReference-1",
+      "status": "SUCCESS",
+      "type": "DEBIT",
+      "amount": 1000.06,
+      "credit": false,
+      "creditCard": true,
+      "currency": "SGD",
+      "creationDateTime": "2025-08-06T15:26:02.857Z"
+    }
+  ]
+}'
